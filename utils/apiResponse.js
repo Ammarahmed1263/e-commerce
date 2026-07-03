@@ -1,9 +1,12 @@
+import { transformResponse } from './responseTransformer.js';
+
 export const success = (res, { message, data = null, meta = null, statusCode = 200 }) => {
+  const transformed = data ? transformResponse(data) : null;
   return res.status(statusCode).json({
     success: true,
     message,
-    data,
-    meta
+    data: transformed,
+    meta,
   });
 };
 

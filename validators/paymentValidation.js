@@ -1,8 +1,8 @@
 import { body } from 'express-validator';
 
-export const createStripeIntentValidation = [
+export const createCheckoutSessionValidation = [
   body('cartId').isMongoId().withMessage('Valid cart ID is required'),
-  body('currency').optional().isIn(['usd', 'eur', 'gbp', 'egp']).withMessage('Unsupported currency')
+  body('shippingAddress').optional().isObject().withMessage('Shipping address must be an object')
 ];
 
 export const refundValidation = [

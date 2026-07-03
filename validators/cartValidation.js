@@ -1,7 +1,7 @@
 import { body } from 'express-validator';
 
 export const addItemValidation = [
-  body('productId').isMongoId().withMessage('Invalid product ID'),
+  body('productId').exists().withMessage('Product ID is required'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
 ];
 

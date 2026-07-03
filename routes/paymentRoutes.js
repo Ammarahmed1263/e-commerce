@@ -4,13 +4,14 @@ import validate from '../middlewares/validateMiddleware.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import allowTo from '../middlewares/allowToMiddleware.js';
 import { userRoles } from '../utils/userRoles.js';
-import { createStripeIntentValidation, refundValidation } from '../validators/paymentValidation.js';
+import { createCheckoutSessionValidation, refundValidation } from '../validators/paymentValidation.js';
 
 const router = Router();
 
 router.use(authMiddleware);
 
-router.post('/stripe/create-intent', validate(createStripeIntentValidation), paymentController.createStripeIntent);
+// Create Stripe Checkout Session
+router.post('/stripe/create-session', validate(createCheckoutSessionValidation), paymentController.createCheckoutSession);
 
 // Admin routes
 router.post('/refund', allowTo(userRoles.ADMIN), validate(refundValidation), paymentController.initiateRefund);

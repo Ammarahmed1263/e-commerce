@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import Category from '../models/Category.js';
 import Vendor from '../models/Vendor.js';
 import AppError from '../utils/appError.js';
 import { success, created } from '../utils/apiResponse.js';
@@ -6,6 +7,7 @@ import asyncWrapper from '../utils/asyncWrapper.js';
 import APIFeatures from '../utils/apiFeatures.js';
 import { getCache, setCache, invalidateProducts, invalidateProduct, invalidateHomepage } from '../services/cacheService.js';
 import { productsKey, productKey } from '../services/cacheService.js';
+import { transformResponse } from '../utils/responseTransformer.js';
 
 export const getProducts = asyncWrapper(async (req, res, next) => {
   const cacheKey = productsKey(req.query);
@@ -16,6 +18,17 @@ export const getProducts = asyncWrapper(async (req, res, next) => {
   }
 
   let filter = { status: 'approved', isActive: true };
+  // Support category filter by slug (e.g., ?category=apparel)
+  if (req.query.category) {
+    const catSlug = req.query.category;
+    const categoryDoc = await Category.findOne({ slug: catSlug });
+    if (!categoryDoc) {
+      return next(new AppError(`Invalid category: ${catSlug}.`, 400));
+    }
+    filter.category = categoryDoc._id;
+    // remove from query to avoid APIFeatures treating it as a plain field
+    delete req.query.category;
+  }
   if (req.params.categoryId) filter.category = req.params.categoryId;
   if (req.params.vendorId) filter.vendor = req.params.vendorId;
 

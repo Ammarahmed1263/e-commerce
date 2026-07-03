@@ -74,7 +74,19 @@ export const addItem = asyncWrapper(async (req, res, next) => {
   const cart = await resolveCart(req);
   const { productId, quantity } = req.body;
 
-  const product = await Product.findById(productId);
+  // Accept either a Mongo ObjectId or a slug/custom identifier
+  let product;
+  try {
+    product = await Product.findOne({
+      $or: [{ _id: productId }, { slug: productId }]
+    });
+  } catch (err) {
+    // If Mongoose throws a CastError for an invalid ObjectId, treat as not found
+    if (err.name === 'CastError') {
+      return next(new AppError('Invalid product ID format', 400));
+    }
+    throw err;
+  }
   if (!product || !product.isActive || product.status !== 'approved') {
     return next(new AppError('Product not found or unavailable', 404));
   }

@@ -5,35 +5,25 @@ import AppError from '../utils/appError.js';
 import { success } from '../utils/apiResponse.js';
 import asyncWrapper from '../utils/asyncWrapper.js';
 
-export const createStripeIntent = asyncWrapper(async (req, res, next) => {
-  const { cartId, currency = 'usd' } = req.body;
+export const createCheckoutSession = asyncWrapper(async (req, res, next) => {
+  const { cartId, shippingAddress } = req.body;
 
-  const cart = await Cart.findById(cartId);
+  const cart = await Cart.findById(cartId).populate('items.product');
   if (!cart || cart.items.length === 0) {
     return next(new AppError('Cart is empty or not found', 400));
   }
 
-  // Ensure cart belongs to user or is guest cart
   if (cart.user && cart.user.toString() !== req.user.id) {
     return next(new AppError('Unauthorized', 403));
   }
 
-  const customerId = await stripeService.createOrGetCustomer(req.user);
-  
-  const amountInCents = Math.round(cart.summary.total * 100);
-
-  const paymentIntent = await stripeService.createPaymentIntent(amountInCents, currency, {
-    cartId: cart._id.toString(),
-    userId: req.user.id
-  });
+  const session = await stripeService.createCheckoutSession(cart, req.user, shippingAddress);
 
   return success(res, {
-    message: 'Payment intent created',
+    message: 'Checkout session created',
     data: {
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency
+      id: session.id,
+      url: session.url
     }
   });
 });
@@ -49,6 +39,9 @@ export const handleStripeWebhook = asyncWrapper(async (req, res, next) => {
   }
 
   switch (event.type) {
+    case 'checkout.session.completed':
+      await stripeService.handleCheckoutSessionCompleted(event.data.object);
+      break;
     case 'payment_intent.succeeded':
       await stripeService.handlePaymentIntentSucceeded(event.data.object);
       break;
