@@ -23,7 +23,7 @@ export const createOrGetCustomer = async (user) => {
   return customer.id;
 };
 
-export const createCheckoutSession = async (cart, user, shippingAddress) => {
+export const createCheckoutSession = async (cart, user) => {
   const lineItems = cart.items.map(item => ({
     price_data: {
       currency: 'usd',
@@ -37,26 +37,77 @@ export const createCheckoutSession = async (cart, user, shippingAddress) => {
     quantity: item.quantity,
   }));
 
-  const session = await stripe.checkout.sessions.create({
+  if (cart.summary?.tax > 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: 'Tax',
+          description: 'Calculated tax',
+        },
+        unit_amount: Math.round(cart.summary.tax * 100),
+      },
+      quantity: 1,
+    });
+  }
+
+  if (cart.summary?.shipping > 0) {
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: 'Shipping',
+          description: 'Shipping and handling',
+        },
+        unit_amount: Math.round(cart.summary.shipping * 100),
+      },
+      quantity: 1,
+    });
+  }
+
+  const sessionConfig = {
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: lineItems,
     customer: await createOrGetCustomer(user),
-    success_url: `${process.env.FRONTEND_URL}/order-success?session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.FRONTEND_URL}/cart`,
+    shipping_address_collection: {
+      allowed_countries: ['US', 'CA', 'GB', 'AE', 'SA', 'EG'],
+    },
     metadata: {
       userId: user._id.toString(),
       cartId: cart._id.toString(),
-      shippingAddress: JSON.stringify(shippingAddress),
     },
-  });
+  };
+
+  if (cart.coupon && cart.coupon.discount) {
+    const stripeCoupon = await stripe.coupons.create({
+      amount_off: Math.round(cart.coupon.discount * 100),
+      currency: 'usd',
+      duration: 'once',
+      name: cart.coupon.code,
+    });
+    sessionConfig.discounts = [{ coupon: stripeCoupon.id }];
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionConfig);
 
   return session;
 };
 
 export const handleCheckoutSessionCompleted = async (session) => {
-  const { userId, cartId, shippingAddress: shippingAddressStr } = session.metadata;
-  const shippingAddress = JSON.parse(shippingAddressStr);
+  const { userId, cartId } = session.metadata;
+
+  const shippingAddress = {
+    firstName: session.shipping_details?.name?.split(' ')[0] || '',
+    lastName: session.shipping_details?.name?.split(' ').slice(1).join(' ') || '',
+    phone: session.customer_details?.phone || '',
+    addressLine1: session.shipping_details?.address?.line1 || '',
+    city: session.shipping_details?.address?.city || '',
+    postalCode: session.shipping_details?.address?.postal_code || '',
+    country: session.shipping_details?.address?.country || ''
+  };
 
   // Check if order already exists for this stripe session
   const existingOrder = await Order.findOne({ stripePaymentIntentId: session.payment_intent });

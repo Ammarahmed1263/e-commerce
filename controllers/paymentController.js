@@ -6,7 +6,7 @@ import { success } from '../utils/apiResponse.js';
 import asyncWrapper from '../utils/asyncWrapper.js';
 
 export const createCheckoutSession = asyncWrapper(async (req, res, next) => {
-  const { cartId, shippingAddress } = req.body;
+  const { cartId } = req.body;
 
   const cart = await Cart.findById(cartId).populate('items.product');
   if (!cart || cart.items.length === 0) {
@@ -17,7 +17,7 @@ export const createCheckoutSession = asyncWrapper(async (req, res, next) => {
     return next(new AppError('Unauthorized', 403));
   }
 
-  const session = await stripeService.createCheckoutSession(cart, req.user, shippingAddress);
+  const session = await stripeService.createCheckoutSession(cart, req.user);
 
   return success(res, {
     message: 'Checkout session created',

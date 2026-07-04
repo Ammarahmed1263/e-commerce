@@ -39,6 +39,7 @@ export const getProducts = asyncWrapper(async (req, res, next) => {
   }
 
   const features = new APIFeatures(Product.find(filter).populate('category', 'name slug').populate('vendor', 'storeName storeSlug logo'), req.query)
+    .textSearch('name', req.query.q)
     .filter()
     .sort()
     .limitFields()
