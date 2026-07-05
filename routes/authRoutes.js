@@ -1,15 +1,17 @@
-import { Router } from 'express';
-import * as authController from '../controllers/authController.js';
-import validate from '../middlewares/validateMiddleware.js';
-import authMiddleware from '../middlewares/authMiddleware.js';
-import { authLimiter } from '../config/rateLimiter.js';
+import { Router } from "express";
+import * as authController from "../controllers/authController.js";
+import validate from "../middlewares/validateMiddleware.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
+import { authLimiter } from "../config/rateLimiter.js";
 import {
   registerValidation,
   loginValidation,
   verifyEmailValidation,
   forgotPasswordValidation,
-  resetPasswordValidation
-} from '../validators/authValidation.js';
+  resetPasswordValidation,
+  sendOtpValidator,
+  verifyOtpValidator,
+} from "../validators/authValidation.js";
 
 const router = Router();
 
@@ -45,7 +47,17 @@ router.post(
   authController.resetPassword,
 );
 
+router.post("/send-otp", 
+  validate(sendOtpValidator), 
+  authController.requestOtp
+);
 
-router.get('/me', authMiddleware, authController.getMe);
+router.post(
+  "/verify-otp",
+  validate(verifyOtpValidator),
+  authController.verifyOtp,
+);
+
+router.get("/me", authMiddleware, authController.getMe);
 
 export default router;
