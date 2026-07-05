@@ -7,6 +7,8 @@ import { generateOrderNumber } from '../utils/generateOrderNumber.js';
 import * as emailService from './emailService.js';
 
 export const createOrGetCustomer = async (user) => {
+  if (!user) return null;
+
   if (user.stripeCustomerId) {
     return user.stripeCustomerId;
   }
@@ -76,10 +78,19 @@ export const createCheckoutSession = async (cart, user) => {
       allowed_countries: ['US', 'CA', 'GB', 'AE', 'SA', 'EG'],
     },
     metadata: {
-      userId: user._id.toString(),
-      cartId: cart._id.toString(),
+      isGuest: user ? 'false' : 'true',
+      userId: user ? user._id.toString() : '',
+      cartId: cart._id ? cart._id.toString() : '',
+      guestEmail: customerEmail || '',
+      guestItems: user ? '' : JSON.stringify(cart.items.map(i => ({ p: i.product._id.toString(), q: i.quantity })))
     },
   };
+
+  if (user) {
+    sessionConfig.customer = await createOrGetCustomer(user);
+  } else if (customerEmail) {
+    sessionConfig.customer_email = customerEmail;
+  }
 
   if (cart.coupon && cart.coupon.discount) {
     const stripeCoupon = await stripe.coupons.create({
@@ -97,7 +108,7 @@ export const createCheckoutSession = async (cart, user) => {
 };
 
 export const handleCheckoutSessionCompleted = async (session) => {
-  const { userId, cartId } = session.metadata;
+  const { isGuest, userId, cartId, guestEmail, guestItems } = session.metadata;
 
   const shippingAddress = {
     firstName: session.shipping_details?.name?.split(' ')[0] || '',
@@ -109,26 +120,49 @@ export const handleCheckoutSessionCompleted = async (session) => {
     country: session.shipping_details?.address?.country || ''
   };
 
-  // Check if order already exists for this stripe session
   const existingOrder = await Order.findOne({ stripePaymentIntentId: session.payment_intent });
   if (existingOrder) {
     console.log(`Order already exists for payment intent ${session.payment_intent}`);
     return;
   }
 
-  const cart = await Cart.findById(cartId).populate('items.product');
-  if (!cart || cart.items.length === 0) {
-    console.error(`Cart ${cartId} is empty or not found during webhook processing`);
-    return;
+  let cartItems = [];
+  let summary = {};
+  let orderUser = null;
+  let dbCart = null;
+  let coupon = undefined;
+
+  if (isGuest === 'false') {
+    dbCart = await Cart.findById(cartId).populate('items.product');
+    if (!dbCart || dbCart.items.length === 0) return console.error('Cart not found during webhook processing');
+
+    orderUser = await User.findById(userId);
+    if (!orderUser) return console.error('User not found during webhook processing');
+
+    cartItems = dbCart.items;
+    summary = dbCart.summary;
+    coupon = dbCart.coupon;
+  } 
+  else {
+    const parsedItems = JSON.parse(guestItems);
+    let subtotal = 0;
+
+    for (const item of parsedItems) {
+      const product = await Product.findById(item.p);
+      if (product) {
+        cartItems.push({
+          product: product,
+          quantity: item.q,
+          unitPrice: product.price,
+          totalPrice: product.price * item.q
+        });
+        subtotal += (product.price * item.q);
+      }
+    }
+    summary = { subtotal, total: subtotal }; 
   }
 
-  const user = await User.findById(userId);
-  if (!user) {
-    console.error(`User ${userId} not found during webhook processing`);
-    return;
-  }
-
-  const orderItems = cart.items.map(item => ({
+  const orderItems = cartItems.map(item => ({
     product: item.product._id,
     vendor: item.product.vendor,
     name: item.product.name,
@@ -146,35 +180,43 @@ export const handleCheckoutSessionCompleted = async (session) => {
     if (!existing) isUnique = true;
   }
 
-  const order = await Order.create({
+  const orderData = {
     orderNumber,
-    user: userId,
     items: orderItems,
     shippingAddress,
     billingAddress: shippingAddress,
-    summary: cart.summary,
-    coupon: cart.coupon,
+    summary,
+    coupon,
     paymentMethod: 'stripe',
     paymentStatus: 'paid',
     stripePaymentIntentId: session.payment_intent,
+    isGuest: isGuest === 'true',
     statusHistory: [{ status: 'placed', note: 'Order created via Stripe Checkout webhook' }]
-  });
+  };
 
-  // Deduct stock and increment sales
-  for (const item of cart.items) {
+  if (isGuest === 'false') {
+    orderData.user = userId;
+  }
+
+  const order = await Order.create(orderData);
+
+  for (const item of cartItems) {
     await Product.findByIdAndUpdate(item.product._id, {
       $inc: { stock: -item.quantity, salesCount: item.quantity }
     });
   }
 
-  // Clear cart
-  cart.items = [];
-  cart.coupon = undefined;
-  cart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, total: 0, itemCount: 0 };
-  await cart.save();
+  if (isGuest === 'false' && dbCart) {
+    dbCart.items = [];
+    dbCart.coupon = undefined;
+    dbCart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, total: 0, itemCount: 0 };
+    await dbCart.save();
+  }
 
-  await emailService.sendOrderConfirmationEmail(user, order);
-  console.log(`Successfully created order ${orderNumber} for user ${userId}`);
+  const emailRecipient = orderUser || { email: guestEmail, name: shippingAddress.firstName };
+  await emailService.sendOrderConfirmationEmail(emailRecipient, order);
+  
+  console.log(`Successfully created order ${orderNumber}`);
 };
 
 export const createPaymentIntent = async (amountInCents, currency, metadata) => {
