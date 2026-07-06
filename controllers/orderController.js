@@ -29,7 +29,7 @@ export const createOrder = asyncWrapper(async (req, res, next) => {
     product: item.product._id,
     vendor: item.product.vendor,
     name: item.product.name,
-    thumbnail: item.product.thumbnail?.url,
+    thumbnail: item.product.thumbnail?.url || item.product.images?.[0]?.url,
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice
