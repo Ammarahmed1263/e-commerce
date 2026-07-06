@@ -73,7 +73,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
 
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
-app.get("/", (req, res) => res.status(200).json({ status: "Luxora backend API is running" }));
+app.get("/", (req, res) =>   res.status(200).json({ status: "Luxora backend API is running" }));
 
 app.use(notFound);
 app.use(errorHandler);
