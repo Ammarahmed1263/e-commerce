@@ -25,6 +25,7 @@ import vendorRoutes from "./routes/vendorRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
 
 const app = express();
 
@@ -34,7 +35,11 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:4173",
+    ],
     credentials: true,
   }),
 );
@@ -65,6 +70,7 @@ app.use("/api/v1/vendors", vendorRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/banners", bannerRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/wishlist", wishlistRoutes);
 
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 

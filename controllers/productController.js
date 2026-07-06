@@ -84,6 +84,25 @@ export const getProduct = asyncWrapper(async (req, res, next) => {
   return success(res, { message: 'Product retrieved', data: { product } });
 });
 
+export const getFeaturedProducts = asyncWrapper(async (req, res, next) => {
+  const cacheKey = 'products:featured';
+  const cached = await getCache(cacheKey);
+
+  if (cached) {
+    return success(res, { message: 'Featured products retrieved', data: cached });
+  }
+
+  const products = await Product.find({ isFeatured: true, status: 'approved', isActive: true })
+    .populate('category', 'name slug')
+    .populate('vendor', 'storeName storeSlug logo')
+    .sort({ salesCount: -1, 'rating.average': -1 })
+    .limit(12);
+
+  await setCache(cacheKey, { products }, 1800); // 30 mins
+
+  return success(res, { message: 'Featured products retrieved', data: { products } });
+});
+
 // Vendor Controllers
 export const createProduct = asyncWrapper(async (req, res, next) => {
   const vendor = await Vendor.findOne({ user: req.user.id });
@@ -134,6 +153,136 @@ export const deleteProduct = asyncWrapper(async (req, res, next) => {
 
   await invalidateProducts();
   await invalidateProduct(req.params.slug);
+  await invalidateHomepage();
+
+  return success(res, { message: 'Product deleted' });
+});
+
+// ── Seller dashboard product management ─────────────────────────────────────
+// These endpoints are called from the seller dashboard. They accept categoryName
+// (string) and thumbnail (URL string) to keep the UI simple.
+
+export const sellerAddProduct = asyncWrapper(async (req, res, next) => {
+  const vendor = await Vendor.findOne({ user: req.user.id });
+  if (!vendor) return next(new AppError('Vendor profile not found', 404));
+
+  const { name, price, stock, categoryName, thumbnail, description } = req.body;
+
+  // Resolve category by name (case-insensitive), or create it if missing
+  let category = await Category.findOne({ name: new RegExp(`^${categoryName}$`, 'i') });
+  if (!category) {
+    category = await Category.create({ name: categoryName });
+  }
+
+  const product = await Product.create({
+    vendor: vendor._id,
+    category: category._id,
+    name,
+    description: description || name, // fall back to name if no description provided
+    price: Number(price),
+    stock: Number(stock) || 0,
+    thumbnail: thumbnail ? { url: thumbnail } : undefined,
+    status: 'pending',
+    isActive: true,
+  });
+
+  await invalidateProducts();
+
+  // Return shaped to match AdminProduct
+  return created(res, {
+    message: 'Product created and pending approval',
+    data: {
+      product: {
+        id: product._id.toString(),
+        name: product.name,
+        slug: product.slug,
+        thumbnail: product.thumbnail?.url ?? '',
+        category: { id: category._id.toString(), name: category.name },
+        vendor: { id: vendor._id.toString(), storeName: vendor.storeName },
+        price: product.price,
+        stock: product.stock,
+        isFeatured: product.isFeatured,
+        isActive: product.isActive,
+        totalSold: 0,
+        revenue: 0,
+        rating: 0,
+        createdAt: product.createdAt,
+      }
+    }
+  });
+});
+
+export const sellerUpdateProduct = asyncWrapper(async (req, res, next) => {
+  const vendor = await Vendor.findOne({ user: req.user.id });
+  if (!vendor) return next(new AppError('Vendor profile not found', 404));
+
+  const { name, price, stock, categoryName, thumbnail } = req.body;
+  const updateData = {};
+
+  if (name !== undefined) updateData.name = name;
+  if (price !== undefined) updateData.price = Number(price);
+  if (stock !== undefined) updateData.stock = Number(stock);
+  if (thumbnail !== undefined) updateData.thumbnail = thumbnail ? { url: thumbnail } : undefined;
+
+  if (categoryName) {
+    let category = await Category.findOne({ name: new RegExp(`^${categoryName}$`, 'i') });
+    if (!category) category = await Category.create({ name: categoryName });
+    updateData.category = category._id;
+  }
+
+  const product = await Product.findOneAndUpdate(
+    { _id: req.params.productId, vendor: vendor._id },
+    updateData,
+    { new: true, runValidators: true }
+  ).populate('category', 'name');
+
+  if (!product) {
+    return next(new AppError('Product not found or you do not have permission', 404));
+  }
+
+  await invalidateProducts();
+  await invalidateProduct(product.slug);
+  await invalidateHomepage();
+
+  return success(res, {
+    message: 'Product updated',
+    data: {
+      product: {
+        id: product._id.toString(),
+        name: product.name,
+        slug: product.slug,
+        thumbnail: product.thumbnail?.url ?? '',
+        category: { id: product.category._id.toString(), name: product.category.name },
+        vendor: { id: vendor._id.toString(), storeName: vendor.storeName },
+        price: product.price,
+        stock: product.stock,
+        isFeatured: product.isFeatured,
+        isActive: product.isActive,
+        totalSold: product.salesCount || 0,
+        revenue: (product.salesCount || 0) * product.price,
+        rating: product.rating?.average || 0,
+        createdAt: product.createdAt,
+      }
+    }
+  });
+});
+
+export const sellerDeleteProduct = asyncWrapper(async (req, res, next) => {
+  const vendor = await Vendor.findOne({ user: req.user.id });
+  if (!vendor) return next(new AppError('Vendor profile not found', 404));
+
+  const product = await Product.findOneAndUpdate(
+    { _id: req.params.productId, vendor: vendor._id },
+    { isActive: false, deletedAt: Date.now() },
+    { new: true }
+  );
+
+  if (!product) {
+    return next(new AppError('Product not found or you do not have permission', 404));
+  }
+
+  await invalidateProducts();
+  await invalidateProduct(product.slug);
   await invalidateHomepage();
 
   return success(res, { message: 'Product deleted' });

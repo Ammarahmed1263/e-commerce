@@ -5,6 +5,15 @@ import asyncWrapper from '../utils/asyncWrapper.js';
 import { deleteCloudinaryImage } from '../services/uploadService.js';
 import { changePasswordValidation } from '../validators/authValidation.js';
 
+export const getMe = asyncWrapper(async (req, res, next) => {
+  // req.user is already populated by authMiddleware
+  const user = await User.findById(req.user.id);
+  return success(res, {
+    message: 'User profile retrieved',
+    data: { user }
+  });
+});
+
 export const updateProfile = asyncWrapper(async (req, res, next) => {
   const allowedFields = ['firstName', 'lastName', 'phone', 'address'];
   const updateData = {};
@@ -89,5 +98,27 @@ export const getMyReviews = asyncWrapper(async (req, res, next) => {
     message: 'My reviews retrieved',
     data: { reviews },
     meta: { total, page: req.query.page * 1 || 1, limit: req.query.limit * 1 || 100 }
+  });
+});
+
+export const getMyOrders = asyncWrapper(async (req, res, next) => {
+  const { default: Order } = await import('../models/Order.js');
+  const { default: APIFeatures } = await import('../utils/apiFeatures.js');
+
+  const baseQuery = Order.find({ user: req.user.id })
+    .populate('items.product', 'name slug thumbnail price');
+
+  const features = new APIFeatures(baseQuery, req.query)
+    .filter()
+    .sort()
+    .paginate();
+
+  const orders = await features.query;
+  const total = await Order.countDocuments({ user: req.user.id });
+
+  return success(res, {
+    message: 'My orders retrieved',
+    data: { orders },
+    meta: { total, page: req.query.page * 1 || 1, limit: req.query.limit * 1 || 10 }
   });
 });

@@ -3,10 +3,8 @@ import AppError from '../utils/appError.js';
 
 const validate = (validations) => {
   return async (req, res, next) => {
-    for (let validation of validations) {
-      const result = await validation.run(req);
-      if (result.errors.length) break;
-    }
+    // Run ALL validators so the response contains every field error at once
+    await Promise.all(validations.map(validation => validation.run(req)));
 
     const errors = validationResult(req);
     if (errors.isEmpty()) {

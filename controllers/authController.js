@@ -20,7 +20,7 @@ const setTokenCookie = (res, token) => {
 };
 
 export const register = asyncWrapper(async (req, res, next) => {
-  const { firstName, lastName, email, password, phone } = req.body;
+  const { firstName, lastName, email, password, phone, role } = req.body;
 
   const existingUser = await User.findOne({ email });
   if (existingUser) {
@@ -31,18 +31,35 @@ export const register = asyncWrapper(async (req, res, next) => {
 
   const emailVerificationToken = generateEmailToken();
 
+  // Only allow 'customer' or 'seller' to be self-assigned — never 'admin'
+  const assignedRole = role === 'seller' ? 'seller' : 'customer';
+
   const user = await User.create({
     firstName,
     lastName,
     email,
     password,
     phone,
+    role: assignedRole,
     emailVerificationToken: crypto
       .createHash("sha256")
       .update(emailVerificationToken)
       .digest("hex"),
-    emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000,
   });
+
+  // If registering as a seller, also create the vendor record if store info provided
+  if (assignedRole === 'seller' && req.body.storeName) {
+    const { default: Vendor } = await import('../models/Vendor.js');
+    await Vendor.create({
+      user: user._id,
+      storeName: req.body.storeName,
+      storeDescription: req.body.storeDescription,
+      businessEmail: req.body.businessEmail || email,
+      businessPhone: req.body.businessPhone || phone,
+      status: 'pending'
+    });
+  }
 
   await emailService.sendVerificationEmail(user, emailVerificationToken);
 
