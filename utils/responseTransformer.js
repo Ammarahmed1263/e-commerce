@@ -11,6 +11,16 @@ export function transformResponse(data, seen = new WeakSet()) {
     return transformResponse(data.toObject(), seen);
   }
 
+  // Handle Date objects
+  if (data instanceof Date) {
+    return data.toISOString();
+  }
+
+  // Handle MongoDB ObjectId specifically
+  if (data._bsontype === 'ObjectID' || data._bsontype === 'ObjectId' || (data.constructor && data.constructor.name === 'ObjectId')) {
+    return data.toString();
+  }
+
   // Arrays – map each element with the same seen set
   if (Array.isArray(data)) {
     return data.map(item => transformResponse(item, seen));
