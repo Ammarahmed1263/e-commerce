@@ -44,7 +44,10 @@ app.use(
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      // Allow only exact matches or specifically YOUR Vercel project's preview URLs
+      const isVercelPreview = /^https:\/\/luxora-ecommerce(?:-[a-zA-Z0-9-]+)?\.vercel\.app$/.test(origin);
+      
+      if (allowedOrigins.includes(origin) || isVercelPreview) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
