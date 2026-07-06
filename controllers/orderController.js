@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
+import User from '../models/User.js';
 import AppError from '../utils/appError.js';
 import { success, created } from '../utils/apiResponse.js';
 import asyncWrapper from '../utils/asyncWrapper.js';
@@ -50,6 +51,7 @@ export const createOrder = asyncWrapper(async (req, res, next) => {
     billingAddress: req.body.billingAddress || shippingAddress,
     summary: cart.summary,
     coupon: cart.coupon,
+    pointsUsed: cart.pointsUsed,
     paymentMethod,
     statusHistory: [{ status: 'placed', note: 'Order placed by user' }]
   };
@@ -73,8 +75,15 @@ export const createOrder = asyncWrapper(async (req, res, next) => {
   // Clear cart
   cart.items = [];
   cart.coupon = undefined;
-  cart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, total: 0, itemCount: 0 };
+  cart.pointsUsed = 0;
+  cart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, pointsDiscount: 0, total: 0, itemCount: 0 };
   await cart.save();
+
+  // Add reward points and deduct used points
+  const earnedPoints = Math.floor(order.summary.total);
+  const usedPoints = order.pointsUsed || 0;
+  const netPoints = earnedPoints - usedPoints;
+  await User.findByIdAndUpdate(req.user.id, { $inc: { rewardPoints: netPoints } });
 
   await emailService.sendOrderConfirmationEmail(req.user, order);
 

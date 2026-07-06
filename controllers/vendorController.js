@@ -163,13 +163,20 @@ export const getVendorProducts = asyncWrapper(async (req, res, next) => {
   const { default: Product } = await import('../models/Product.js');
   const { default: APIFeatures } = await import('../utils/apiFeatures.js');
 
+  let filter = { vendor: vendor._id, isActive: true };
+
   const features = new APIFeatures(
-    Product.find({ vendor: vendor._id, isActive: true }).populate('category', 'name slug'),
+    Product.find(filter).populate('category', 'name slug'),
     req.query
-  ).sort().paginate();
+  ).textSearch('name', req.query.search).sort().paginate();
 
   const rawProducts = await features.query;
-  const total = await Product.countDocuments({ vendor: vendor._id, isActive: true });
+  
+  let countFilter = { ...filter };
+  if (req.query.search) {
+    countFilter.$text = { $search: req.query.search };
+  }
+  const total = await Product.countDocuments(countFilter);
 
   // Shape to match AdminProduct interface
   const products = rawProducts.map(p => ({
@@ -243,6 +250,32 @@ export const getVendorOrders = asyncWrapper(async (req, res, next) => {
     data: { orders },
     meta: { total, page, limit }
   });
+});
+
+export const updateVendorOrderStatus = asyncWrapper(async (req, res, next) => {
+  const { status } = req.body;
+  const vendor = await Vendor.findOne({ user: req.user.id });
+  
+  if (!vendor || vendor.status !== 'approved') {
+    return next(new AppError('Vendor not found or not approved', 404));
+  }
+
+  const { default: Order } = await import('../models/Order.js');
+  
+  const order = await Order.findOne({ 
+    _id: req.params.orderId,
+    'items.vendor': vendor._id
+  });
+
+  if (!order) {
+    return next(new AppError('Order not found or you do not have permission', 404));
+  }
+
+  order.status = status;
+  order.statusHistory.push({ status, note: `Status updated to ${status} by seller` });
+  
+  await order.save();
+  return success(res, { message: 'Order status updated', data: { order } });
 });
 
 export const updateVendorProfile = asyncWrapper(async (req, res, next) => {

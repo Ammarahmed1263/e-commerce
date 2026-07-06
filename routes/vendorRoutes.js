@@ -24,6 +24,7 @@ router.get('/dashboard/stats', allowTo(userRoles.SELLER, userRoles.ADMIN), vendo
 router.get('/dashboard/revenue-chart', allowTo(userRoles.SELLER, userRoles.ADMIN), vendorController.getVendorRevenueChart);
 router.get('/dashboard/products', allowTo(userRoles.SELLER, userRoles.ADMIN), vendorController.getVendorProducts);
 router.get('/dashboard/orders', allowTo(userRoles.SELLER, userRoles.ADMIN), vendorController.getVendorOrders);
+router.patch('/dashboard/orders/:orderId/status', allowTo(userRoles.SELLER, userRoles.ADMIN), vendorController.updateVendorOrderStatus);
 router.patch('/profile/me', allowTo(userRoles.SELLER, userRoles.ADMIN), validate(updateVendorValidation), vendorController.updateVendorProfile);
 
 // Seller product CRUD (dashboard — uses productId not slug, accepts categoryName string)

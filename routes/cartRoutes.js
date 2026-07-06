@@ -20,6 +20,9 @@ router.delete('/', optionalAuthMiddleware, cartController.clearCart);
 router.post('/coupon', optionalAuthMiddleware, validate(couponValidation), cartController.applyCoupon);
 router.delete('/coupon', optionalAuthMiddleware, cartController.removeCoupon);
 
+router.post('/points', authMiddleware, cartController.applyPoints);
+router.delete('/points', authMiddleware, cartController.removePoints);
+
 router.post('/merge', authMiddleware, validate(mergeCartValidation), cartController.mergeCart);
 
 export default router;

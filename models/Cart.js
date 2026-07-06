@@ -41,7 +41,8 @@ const cartSchema = new mongoose.Schema(
       couponDiscount: { type: Number, default: 0 },
       total: { type: Number, default: 0 },
       currency: { type: String, default: 'USD' },
-      itemCount: { type: Number, default: 0 }
+      itemCount: { type: Number, default: 0 },
+      pointsDiscount: { type: Number, default: 0 }
     },
     coupon: {
       code: String,
@@ -53,6 +54,10 @@ const cartSchema = new mongoose.Schema(
     },
     expiresAt: {
       type: Date
+    },
+    pointsUsed: {
+      type: Number,
+      default: 0
     }
   },
   {

@@ -7,6 +7,7 @@ import {
   registerValidation,
   loginValidation,
   verifyEmailValidation,
+  resendVerificationValidation,
   forgotPasswordValidation,
   resetPasswordValidation
 } from '../validators/authValidation.js';
@@ -25,12 +26,18 @@ router.post(
   validate(loginValidation),
   authController.login,
 );
+router.post("/google", authController.googleLogin);
 router.post("/logout", authController.logout);
 router.post("/refresh-token", authController.refreshToken);
 router.post(
   "/verify-email",
   validate(verifyEmailValidation),
   authController.verifyEmail,
+);
+router.post(
+  "/resend-verification",
+  validate(resendVerificationValidation),
+  authController.resendVerification,
 );
 router.post(
   "/forgot-password",

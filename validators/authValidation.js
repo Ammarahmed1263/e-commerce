@@ -44,6 +44,10 @@ export const forgotPasswordValidation = [
   body('email').trim().notEmpty().withMessage('Email is required').isEmail().normalizeEmail()
 ];
 
+export const resendVerificationValidation = [
+  body('email').trim().notEmpty().withMessage('Email is required').isEmail().normalizeEmail()
+];
+
 export const resetPasswordValidation = [
   body('token').trim().notEmpty().withMessage('Token is required').isHexadecimal().isLength({ min: 64, max: 64 }),
   body('password')

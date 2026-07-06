@@ -18,16 +18,25 @@ export const getProducts = asyncWrapper(async (req, res, next) => {
   }
 
   let filter = { status: 'approved', isActive: true };
-  // Support category filter by slug (e.g., ?category=apparel)
   if (req.query.category) {
-    const catSlug = req.query.category;
-    const categoryDoc = await Category.findOne({ slug: catSlug });
-    if (!categoryDoc) {
-      return next(new AppError(`Invalid category: ${catSlug}.`, 400));
+    const slugs = req.query.category.split(',');
+    const categoryDocs = await Category.find({ slug: { $in: slugs } });
+    if (!categoryDocs || categoryDocs.length === 0) {
+      return next(new AppError(`Invalid category: ${req.query.category}.`, 400));
     }
-    filter.category = categoryDoc._id;
+    filter.category = { $in: categoryDocs.map(c => c._id) };
     // remove from query to avoid APIFeatures treating it as a plain field
     delete req.query.category;
+  }
+  
+  if (req.query.inStock === 'true') {
+    filter.stock = { $gt: 0 };
+    delete req.query.inStock;
+  }
+
+  if (req.query.minRating) {
+    filter['rating.average'] = { $gte: Number(req.query.minRating) };
+    delete req.query.minRating;
   }
   if (req.params.categoryId) filter.category = req.params.categoryId;
   if (req.params.vendorId) filter.vendor = req.params.vendorId;
@@ -110,12 +119,12 @@ export const createProduct = asyncWrapper(async (req, res, next) => {
     return next(new AppError('Only approved vendors can create products', 403));
   }
 
-  const productData = { ...req.body, vendor: vendor._id, status: 'pending' };
+  const productData = { ...req.body, vendor: vendor._id, status: 'approved' };
   const product = await Product.create(productData);
 
   await invalidateProducts();
 
-  return created(res, { message: 'Product created and pending approval', data: { product } });
+  return created(res, { message: 'Product created successfully', data: { product } });
 });
 
 export const updateProduct = asyncWrapper(async (req, res, next) => {
@@ -182,7 +191,7 @@ export const sellerAddProduct = asyncWrapper(async (req, res, next) => {
     price: Number(price),
     stock: Number(stock) || 0,
     thumbnail: thumbnail ? { url: thumbnail } : undefined,
-    status: 'pending',
+    status: 'approved',
     isActive: true,
   });
 
@@ -190,7 +199,7 @@ export const sellerAddProduct = asyncWrapper(async (req, res, next) => {
 
   // Return shaped to match AdminProduct
   return created(res, {
-    message: 'Product created and pending approval',
+    message: 'Product created successfully',
     data: {
       product: {
         id: product._id.toString(),
