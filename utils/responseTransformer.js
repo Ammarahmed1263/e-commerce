@@ -33,7 +33,17 @@ export function transformResponse(data, seen = new WeakSet()) {
       result.id = String(value);
       continue;
     }
-    if (['thumbnail', 'avatar', 'image'].includes(key)) {
+    if (key === 'avatar') {
+      if (typeof value === 'string') {
+        result[key] = value;
+      } else if (value && typeof value === 'object' && value.url) {
+        result[key] = value.url;
+      } else {
+        result[key] = null;
+      }
+      continue;
+    }
+    if (['thumbnail', 'image'].includes(key)) {
       if (typeof value === 'string') {
         result[key] = { url: value };
       } else if (value && typeof value === 'object') {
