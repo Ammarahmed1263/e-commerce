@@ -110,7 +110,7 @@ export const getStats = asyncWrapper(async (req, res, next) => {
     ]),
     Order.countDocuments({ status: { $ne: 'cancelled' } }),
     User.countDocuments({ role: 'customer' }),
-    Product.countDocuments({ isActive: true }),
+    Product.countDocuments({ isActive: true, status: 'approved' }),
     Vendor.countDocuments({ status: 'pending' }),
     Vendor.countDocuments()
   ]);
@@ -258,7 +258,7 @@ export const getVendors = asyncWrapper(async (req, res, next) => {
   const formattedVendors = await Promise.all(vendors.map(async (vendor) => {
     const productCount = await Product.countDocuments({ vendor: vendor._id });
     return {
-      id: vendor._id,
+      id: vendor._id.toString(),
       storeName: vendor.storeName,
       storeSlug: vendor.storeSlug,
       logo: vendor.logo?.url,
@@ -309,7 +309,7 @@ export const getUsers = asyncWrapper(async (req, res, next) => {
     const orders = await Order.find({ user: user._id, status: { $ne: 'cancelled' } });
     const totalSpent = orders.reduce((sum, order) => sum + (order.summary?.total || 0), 0);
     return {
-      id: user._id,
+      id: user._id.toString(),
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
@@ -377,7 +377,7 @@ export const getProducts = asyncWrapper(async (req, res, next) => {
   const total = await Product.countDocuments(filter);
   
   const formattedProducts = products.map(product => ({
-    id: product._id,
+    id: product._id.toString(),
     name: product.name,
     slug: product.slug,
     thumbnail: product.thumbnail?.url || '',
@@ -442,7 +442,7 @@ export const getOrders = asyncWrapper(async (req, res, next) => {
   const total = await Order.countDocuments(filter);
   
   const formattedOrders = orders.map(order => ({
-    id: order._id,
+    id: order._id.toString(),
     orderNumber: order.orderNumber,
     customer: order.user ? {
       id: order.user._id,

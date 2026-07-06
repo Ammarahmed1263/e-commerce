@@ -1,4 +1,5 @@
 import Category from '../models/Category.js';
+import Product from '../models/Product.js';
 import AppError from '../utils/appError.js';
 import { success, created } from '../utils/apiResponse.js';
 import asyncWrapper from '../utils/asyncWrapper.js';
@@ -23,8 +24,13 @@ export const getCategories = asyncWrapper(async (req, res, next) => {
   const categories = await features.query;
   const total = await Category.countDocuments({ isActive: true });
 
+  const categoriesWithCounts = await Promise.all(categories.map(async (cat) => {
+    const productCount = await Product.countDocuments({ category: cat._id, isActive: true, status: 'approved' });
+    return { ...cat.toObject(), productCount };
+  }));
+
   const result = {
-    data: { categories },
+    data: { categories: categoriesWithCounts },
     meta: {
       total,
       page: req.query.page * 1 || 1,
@@ -51,9 +57,12 @@ export const getCategory = asyncWrapper(async (req, res, next) => {
     return next(new AppError('Category not found', 404));
   }
 
-  await setCache(cacheKey, { category }, 3600);
+  const productCount = await Product.countDocuments({ category: category._id, isActive: true, status: 'approved' });
+  const categoryWithCount = { ...category.toObject(), productCount };
+
+  await setCache(cacheKey, { category: categoryWithCount }, 3600);
   
-  return success(res, { message: 'Category retrieved', data: { category } });
+  return success(res, { message: 'Category retrieved', data: { category: categoryWithCount } });
 });
 
 // Admin Controllers

@@ -56,12 +56,17 @@ const orderSchema = new mongoose.Schema(
       tax: Number,
       discount: Number,
       couponDiscount: Number,
+      pointsDiscount: Number,
       total: Number,
       currency: { type: String, default: 'USD' }
     },
     coupon: {
       code: String,
       discount: Number
+    },
+    pointsUsed: {
+      type: Number,
+      default: 0
     },
     status: {
       type: String,

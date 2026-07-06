@@ -26,6 +26,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
+import newsletterRoutes from "./routes/newsletterRoutes.js";
 
 const app = express();
 
@@ -71,6 +72,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/banners", bannerRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
+app.use("/api/v1/newsletter", newsletterRoutes);
 
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 

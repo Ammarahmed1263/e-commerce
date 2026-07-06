@@ -46,16 +46,24 @@ const recalculateSummary = (cart) => {
   if (cart.coupon && cart.coupon.discount) {
     couponDiscount = cart.coupon.discount; // Fixed discount or apply percentage
   }
-
   cart.summary.couponDiscount = couponDiscount;
   
+  let pointsDiscount = 0;
+  if (cart.pointsUsed > 0) {
+    pointsDiscount = cart.pointsUsed * 0.01; // 100 points = $1
+  }
+  cart.summary.pointsDiscount = pointsDiscount;
+  
+  const totalDiscount = couponDiscount + pointsDiscount;
+
   // Tax 8%
-  cart.summary.tax = parseFloat(((subtotal - couponDiscount) * 0.08).toFixed(2));
+  cart.summary.tax = parseFloat(((subtotal - totalDiscount) * 0.08).toFixed(2));
+  if (cart.summary.tax < 0) cart.summary.tax = 0;
   
   // Free shipping above $100
-  cart.summary.shipping = (subtotal - couponDiscount) > 100 ? 0 : 10;
+  cart.summary.shipping = (subtotal - totalDiscount) > 100 ? 0 : 10;
   
-  cart.summary.total = parseFloat(((subtotal - couponDiscount) + cart.summary.tax + cart.summary.shipping).toFixed(2));
+  cart.summary.total = parseFloat(((subtotal - totalDiscount) + cart.summary.tax + cart.summary.shipping).toFixed(2));
   
   if (cart.summary.total < 0) cart.summary.total = 0;
 };
@@ -268,4 +276,42 @@ export const removeCoupon = asyncWrapper(async (req, res, next) => {
   await cart.populate('items.product', 'name slug thumbnail price stock');
 
   return success(res, { message: 'Coupon removed', data: { cart } });
+});
+
+export const applyPoints = asyncWrapper(async (req, res, next) => {
+  const cart = await resolveCart(req);
+  if (!req.user) {
+    return next(new AppError('You must be logged in to use reward points', 401));
+  }
+
+  const { points } = req.body;
+  
+  if (!points || points <= 0) {
+    return next(new AppError('Please specify a valid number of points to use', 400));
+  }
+
+  const { default: User } = await import('../models/User.js');
+  const user = await User.findById(req.user.id);
+  
+  if (points > (user.rewardPoints || 0)) {
+    return next(new AppError(`You only have ${user.rewardPoints || 0} points available`, 400));
+  }
+
+  cart.pointsUsed = points;
+  recalculateSummary(cart);
+  await cart.save();
+  await cart.populate('items.product', 'name slug thumbnail price stock');
+
+  return success(res, { message: 'Points applied to cart', data: { cart } });
+});
+
+export const removePoints = asyncWrapper(async (req, res, next) => {
+  const cart = await resolveCart(req);
+  
+  cart.pointsUsed = 0;
+  recalculateSummary(cart);
+  await cart.save();
+  await cart.populate('items.product', 'name slug thumbnail price stock');
+
+  return success(res, { message: 'Points removed from cart', data: { cart } });
 });

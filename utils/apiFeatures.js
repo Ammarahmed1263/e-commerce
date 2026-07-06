@@ -18,7 +18,14 @@ class APIFeatures {
 
   sort() {
     if (this.queryString.sort) {
-      const sortBy = this.queryString.sort.split(',').join(' ');
+      let sortBy = this.queryString.sort;
+      if (sortBy === 'popularity') sortBy = '-salesCount';
+      else if (sortBy === 'newest') sortBy = '-createdAt';
+      else if (sortBy === 'price_asc') sortBy = 'price';
+      else if (sortBy === 'price_desc') sortBy = '-price';
+      else if (sortBy === 'rating') sortBy = '-rating.average';
+      else sortBy = sortBy.split(',').join(' ');
+
       this.query = this.query.sort(sortBy);
     } else {
       this.query = this.query.sort('-createdAt');
