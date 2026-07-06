@@ -206,7 +206,7 @@ export const getTopProducts = asyncWrapper(async (req, res, next) => {
   const topProducts = products.map(product => ({
     id: product._id,
     name: product.name,
-    thumbnail: product.thumbnail?.url || '',
+    thumbnail: product.thumbnail?.url || product.images?.[0]?.url || '',
     category: product.category?.name || 'Uncategorized',
     unitsSold: product.salesCount || 0,
     revenue: (product.salesCount || 0) * product.price
@@ -380,7 +380,7 @@ export const getProducts = asyncWrapper(async (req, res, next) => {
     id: product._id.toString(),
     name: product.name,
     slug: product.slug,
-    thumbnail: product.thumbnail?.url || '',
+    thumbnail: product.thumbnail?.url || product.images?.[0]?.url || '',
     category: product.category ? { id: product.category._id, name: product.category.name } : { id: '', name: 'Uncategorized' },
     vendor: product.vendor ? { id: product.vendor._id, storeName: product.vendor.storeName } : { id: '', storeName: 'Unknown' },
     price: product.price,
