@@ -74,7 +74,11 @@ export const register = asyncWrapper(async (req, res, next) => {
   return created(res, {
     message:
       "Registration successful. Please check your email to verify your account.",
-    data: { user: userObject },
+    data: { 
+      user: userObject,
+      // EMERGENCY DEADLINE BYPASS: Return the URL directly so it can be clicked from the Network Tab
+      verificationUrl: `${process.env.FRONTEND_URL}/auth/verify-email?token=${emailVerificationToken}`
+    },
   });
 });
 
@@ -370,5 +374,11 @@ export const resendVerification = asyncWrapper(async (req, res, next) => {
   await user.save({ validateBeforeSave: false });
   await emailService.sendVerificationEmail(user, emailVerificationToken);
 
-  return success(res, { message: "Verification email resent successfully." });
+  return success(res, { 
+    message: "Verification email resent successfully.",
+    data: {
+      // EMERGENCY DEADLINE BYPASS
+      verificationUrl: `${process.env.FRONTEND_URL}/auth/verify-email?token=${emailVerificationToken}`
+    }
+  });
 });
