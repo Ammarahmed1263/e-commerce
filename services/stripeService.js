@@ -154,6 +154,7 @@ export const handleCheckoutSessionCompleted = async (session) => {
     billingAddress: shippingAddress,
     summary: cart.summary,
     coupon: cart.coupon,
+    pointsUsed: cart.pointsUsed,
     paymentMethod: 'stripe',
     paymentStatus: 'paid',
     stripePaymentIntentId: session.payment_intent,
@@ -170,8 +171,15 @@ export const handleCheckoutSessionCompleted = async (session) => {
   // Clear cart
   cart.items = [];
   cart.coupon = undefined;
-  cart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, total: 0, itemCount: 0 };
+  cart.pointsUsed = 0;
+  cart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, pointsDiscount: 0, total: 0, itemCount: 0 };
   await cart.save();
+
+  // Add reward points and deduct used points
+  const earnedPoints = Math.floor(order.summary.total);
+  const usedPoints = order.pointsUsed || 0;
+  const netPoints = earnedPoints - usedPoints;
+  await User.findByIdAndUpdate(userId, { $inc: { rewardPoints: netPoints } });
 
   await emailService.sendOrderConfirmationEmail(user, order);
   console.log(`Successfully created order ${orderNumber} for user ${userId}`);
