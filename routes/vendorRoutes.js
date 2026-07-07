@@ -13,6 +13,9 @@ const router = Router();
 // Public routes (must come before /:slug to avoid capture)
 router.get('/', vendorController.getVendors);
 
+// Public slug route (must come before auth middleware, but after other specific GET routes if any)
+router.get('/:slug', vendorController.getVendor);
+
 // Protected routes
 router.use(authMiddleware);
 
@@ -31,9 +34,6 @@ router.patch('/profile/me', allowTo(userRoles.SELLER, userRoles.ADMIN), validate
 router.post('/dashboard/products', allowTo(userRoles.SELLER, userRoles.ADMIN), productController.sellerAddProduct);
 router.patch('/dashboard/products/:productId', allowTo(userRoles.SELLER, userRoles.ADMIN), productController.sellerUpdateProduct);
 router.delete('/dashboard/products/:productId', allowTo(userRoles.SELLER, userRoles.ADMIN), productController.sellerDeleteProduct);
-
-// Public slug route last so it doesn't swallow the dashboard paths
-router.get('/:slug', vendorController.getVendor);
 
 // Note: Admin vendor approval is in adminRoutes.js
 
