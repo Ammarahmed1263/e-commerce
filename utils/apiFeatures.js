@@ -2,6 +2,7 @@ class APIFeatures {
   constructor(query, queryString) {
     this.query = query;
     this.queryString = queryString;
+    this.originalQueryString = { ...queryString };
   }
 
   filter() {
@@ -60,10 +61,10 @@ class APIFeatures {
   }
 
   priceRange() {
-    if (this.queryString.minPrice || this.queryString.maxPrice) {
+    if (this.originalQueryString.minPrice || this.originalQueryString.maxPrice) {
       const priceFilter = {};
-      if (this.queryString.minPrice) priceFilter.$gte = Number(this.queryString.minPrice);
-      if (this.queryString.maxPrice) priceFilter.$lte = Number(this.queryString.maxPrice);
+      if (this.originalQueryString.minPrice) priceFilter.$gte = Number(this.originalQueryString.minPrice);
+      if (this.originalQueryString.maxPrice) priceFilter.$lte = Number(this.originalQueryString.maxPrice);
       this.query = this.query.find({ price: priceFilter });
     }
     return this;
