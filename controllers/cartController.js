@@ -223,7 +223,11 @@ export const applyCoupon = asyncWrapper(async (req, res, next) => {
   const coupon = await Coupon.findOne({ 
     code: req.body.code.toUpperCase(),
     isActive: true,
-    expiresAt: { $gt: new Date() }
+    $or: [
+      { expiresAt: { $gt: new Date() } },
+      { expiresAt: null },
+      { expiresAt: { $exists: false } }
+    ]
   });
 
   if (!coupon) {
