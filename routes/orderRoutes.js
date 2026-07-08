@@ -6,11 +6,11 @@ import { createOrderValidation, cancelOrderValidation } from '../validators/orde
 
 const router = Router();
 
-router.use(authMiddleware);
+// router.use(authMiddleware);
 
-router.post('/', validate(createOrderValidation), orderController.createOrder);
-router.get('/', orderController.getOrders);
-router.get('/:orderId', orderController.getOrder);
-router.patch('/:orderId/cancel', validate(cancelOrderValidation), orderController.cancelOrder);
+router.post('/',optionalAuthMiddleware, validate(createOrderValidation), orderController.createOrder);
+router.get('/',authMiddleware, orderController.getOrders);
+router.get('/:orderId',authMiddleware, orderController.getOrder);
+router.patch('/:orderId/cancel',authMiddleware, validate(cancelOrderValidation), orderController.cancelOrder);
 
 export default router;

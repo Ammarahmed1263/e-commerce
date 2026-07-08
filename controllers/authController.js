@@ -351,6 +351,32 @@ export const getMe = asyncWrapper(async (req, res, next) => {
     data: { user },
   });
 });
+
+
+export const requestOtp = asyncWrapper(async (req, res, next) => {
+  const { phoneNumber } = req.body;
+  
+  const result = await authService.sendOtp(phoneNumber);
+  
+  return success(res, {
+    message: result.message, 
+    data: null, 
+  });
+});
+
+export const verifyOtp = asyncWrapper(async (req, res, next) => {
+  const { phoneNumber, otp } = req.body;
+  
+  const result = await authService.verifyOtp(phoneNumber, otp);
+  
+  return success(res, {
+    message: result.message, 
+    data: { 
+      user: result.user,
+      token: result.token 
+    },
+  });
+});
 export const resendVerification = asyncWrapper(async (req, res, next) => {
   const { email } = req.body;
   const user = await User.findOne({ email });

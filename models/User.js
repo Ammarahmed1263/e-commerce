@@ -32,8 +32,13 @@ const userSchema = new mongoose.Schema(
       select: false
     },
     phone: {
-      type: String
+      type: String,
+      unique: true
     },
+    isPhoneVerified: { 
+    type: Boolean, 
+    default: false 
+  },
     avatar: {
       url: String,
       publicId: String

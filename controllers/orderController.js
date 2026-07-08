@@ -10,22 +10,54 @@ import * as emailService from '../services/emailService.js';
 import APIFeatures from '../utils/apiFeatures.js';
 
 export const createOrder = asyncWrapper(async (req, res, next) => {
-  const { shippingAddress, paymentMethod, paymentIntentId } = req.body;
+  const { shippingAddress, paymentMethod, paymentIntentId, items: guestItems, guestEmail } = req.body;
 
-  const cart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+  let cartItems = [];
+  let summary = {};
+  let coupon = undefined;
+  let userCart = null;
 
-  if (!cart || cart.items.length === 0) {
-    return next(new AppError('Your cart is empty', 400));
+  if (req.user) {
+    userCart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+    
+    if (!userCart || userCart.items.length === 0) {
+      return next(new AppError('Your cart is empty', 400));
+    }
+    
+    cartItems = userCart.items;
+    summary = userCart.summary;
+    coupon = userCart.coupon;
+  } else {
+    if (!guestItems || guestItems.length === 0) {
+      return next(new AppError('Your cart is empty', 400));
+    }
+    if (!shippingAddress || !shippingAddress.firstName || !shippingAddress.phone) {
+      return next(new AppError('Shipping details (name and phone) are required for guest checkout', 400));
+    }
+
+    let subtotal = 0;
+    for (const item of guestItems) {
+      const product = await Product.findById(item.product);
+      if (!product) return next(new AppError(`Product not found: ${item.product}`, 404));
+
+      cartItems.push({
+        product: product, 
+        quantity: item.quantity,
+        unitPrice: product.price, 
+        totalPrice: product.price * item.quantity
+      });
+      subtotal += (product.price * item.quantity);
+    }
+    summary = req.body.summary || { subtotal, total: subtotal };
   }
 
-  // Check stock again
-  for (const item of cart.items) {
+  for (const item of cartItems) {
     if (item.quantity > item.product.stock) {
       return next(new AppError(`Not enough stock for ${item.product.name}`, 400));
     }
   }
 
-  const orderItems = cart.items.map(item => ({
+  const orderItems = cartItems.map(item => ({
     product: item.product._id,
     vendor: item.product.vendor,
     name: item.product.name,
@@ -45,33 +77,49 @@ export const createOrder = asyncWrapper(async (req, res, next) => {
 
   const orderData = {
     orderNumber,
-    user: req.user.id,
     items: orderItems,
     shippingAddress,
     billingAddress: req.body.billingAddress || shippingAddress,
+    summary,
+    coupon,
     summary: cart.summary,
     coupon: cart.coupon,
     pointsUsed: cart.pointsUsed,
     paymentMethod,
-    statusHistory: [{ status: 'placed', note: 'Order placed by user' }]
+    isGuest: !req.user, 
+    statusHistory: [{ status: 'placed', note: req.user ? 'Order placed by user' : 'Order placed by guest' }]
   };
+
+  if (req.user) {
+    orderData.user = req.user.id;
+  }
 
   if (paymentMethod === 'stripe' && paymentIntentId) {
     orderData.stripePaymentIntentId = paymentIntentId;
-    orderData.paymentStatus = 'pending'; // webhook will update this to 'paid'
+    orderData.paymentStatus = 'pending';
   } else if (paymentMethod === 'cash_on_delivery') {
     orderData.paymentStatus = 'pending';
   }
 
   const order = await Order.create(orderData);
 
-  // Deduct stock and increment sales
-  for (const item of cart.items) {
+  for (const item of cartItems) {
     await Product.findByIdAndUpdate(item.product._id, {
       $inc: { stock: -item.quantity, salesCount: item.quantity }
     });
   }
 
+  if (req.user && userCart) {
+    userCart.items = [];
+    userCart.coupon = undefined;
+    userCart.summary = { subtotal: 0, shipping: 0, tax: 0, discount: 0, couponDiscount: 0, total: 0, itemCount: 0 };
+    await userCart.save();
+  }
+
+  const emailRecipient = req.user || (guestEmail ? { email: guestEmail, name: shippingAddress.firstName } : null);
+  if (emailRecipient) {
+    await emailService.sendOrderConfirmationEmail(emailRecipient, order);
+  }
   // Clear cart
   cart.items = [];
   cart.coupon = undefined;

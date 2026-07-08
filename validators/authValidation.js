@@ -75,3 +75,25 @@ export const changePasswordValidation = [
     return true;
   })
 ];
+
+
+export const sendOtpValidator = [
+  body('phoneNumber')
+    .exists().withMessage('phone number is required')
+    .notEmpty().withMessage('phone number can not be empty')
+    .isMobilePhone('ar-EG').withMessage('phone number is invalid ,it must be egyptian and valid number')
+];
+
+export const verifyOtpValidator = [
+  body('phoneNumber')
+    .exists().withMessage('phone number is required')
+    .notEmpty().withMessage('phone number can not be empty')
+    .isMobilePhone('ar-EG').withMessage('phone number is invalid')
+    ,
+  body('otp')
+    .exists().withMessage('otp is required')
+    .notEmpty().withMessage('otp number can not be empty')
+    .isString().withMessage('otp must be string')
+    .isLength({ min: 4, max: 4 }).withMessage('invalid otp')
+    .isNumeric().withMessage('invalid otp')
+];
