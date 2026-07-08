@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as orderController from '../controllers/orderController.js';
 import validate from '../middlewares/validateMiddleware.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
+import optionalAuthMiddleware from '../middlewares/optionalAuthMiddleware.js';
 import { createOrderValidation, cancelOrderValidation } from '../validators/orderValidation.js';
 
 const router = Router();
