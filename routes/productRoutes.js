@@ -13,6 +13,7 @@ const router = Router();
 router.use('/:productId/reviews', reviewRoutes);
 
 // Public routes
+router.get('/featured', productController.getFeaturedProducts);
 router.get('/', productController.getProducts);
 router.get('/:slug', productController.getProduct);
 

@@ -25,6 +25,8 @@ import vendorRoutes from "./routes/vendorRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
+import newsletterRoutes from "./routes/newsletterRoutes.js";
 
 const app = express();
 
@@ -34,7 +36,24 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        process.env.FRONTEND_URL || "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:4173",
+      ];
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Allow only exact matches or specifically YOUR Vercel project's preview URLs
+      const isVercelPreview = /^https:\/\/luxora-ecommerce(?:-[a-zA-Z0-9-]+)?\.vercel\.app$/.test(origin);
+      
+      if (allowedOrigins.includes(origin) || isVercelPreview) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   }),
 );
@@ -65,8 +84,11 @@ app.use("/api/v1/vendors", vendorRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/banners", bannerRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/wishlist", wishlistRoutes);
+app.use("/api/v1/newsletter", newsletterRoutes);
 
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+app.get("/", (req, res) =>   res.status(200).json({ status: "Luxora backend API is running" }));
 
 app.use(notFound);
 app.use(errorHandler);

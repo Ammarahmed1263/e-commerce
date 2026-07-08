@@ -79,6 +79,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true
     },
+    rewardPoints: {
+      type: Number,
+      default: 0
+    },
     deletedAt: {
       type: Date
     },

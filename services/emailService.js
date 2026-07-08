@@ -1,11 +1,13 @@
-import transporter from "../config/email.js";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async (options) => {
   console.log(
     "falling to simulation: ",
-    !process.env.SMTP_USER || process.env.SMTP_USER.includes("your_email"),
+    !process.env.RESEND_API_KEY,
   );
-  if (!process.env.SMTP_USER || process.env.SMTP_USER.includes("your_email")) {
+  if (!process.env.RESEND_API_KEY) {
     console.log(
       `\n📧 [EMAIL SIMULATION] To: ${options.to} | Subject: ${options.subject}`,
     );
@@ -14,7 +16,12 @@ const sendEmail = async (options) => {
   }
 
   try {
-    await transporter.sendMail(options);
+    await resend.emails.send({
+      from: options.from || process.env.EMAIL_FROM || "onboarding@resend.dev",
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    });
   } catch (error) {
     console.error("Email sending failed:", error);
   }

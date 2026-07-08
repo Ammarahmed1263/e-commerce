@@ -89,10 +89,19 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-productSchema.pre('save', function () {
+productSchema.pre('save', async function (next) {
   if (this.isModified('name')) {
-    this.slug = generateSlug(this.name);
+    let baseSlug = generateSlug(this.name);
+    let slug = baseSlug;
+    let counter = 1;
+    const ProductModel = mongoose.model('Product');
+    while (await ProductModel.findOne({ slug, _id: { $ne: this._id } })) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    this.slug = slug;
   }
+  next();
 });
 
 productSchema.index({ category: 1 });

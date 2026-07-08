@@ -2,6 +2,7 @@ class APIFeatures {
   constructor(query, queryString) {
     this.query = query;
     this.queryString = queryString;
+    this.originalQueryString = { ...queryString };
   }
 
   filter() {
@@ -18,7 +19,14 @@ class APIFeatures {
 
   sort() {
     if (this.queryString.sort) {
-      const sortBy = this.queryString.sort.split(',').join(' ');
+      let sortBy = this.queryString.sort;
+      if (sortBy === 'popularity') sortBy = '-salesCount';
+      else if (sortBy === 'newest') sortBy = '-createdAt';
+      else if (sortBy === 'price_asc') sortBy = 'price';
+      else if (sortBy === 'price_desc') sortBy = '-price';
+      else if (sortBy === 'rating') sortBy = '-rating.average';
+      else sortBy = sortBy.split(',').join(' ');
+
       this.query = this.query.sort(sortBy);
     } else {
       this.query = this.query.sort('-createdAt');
@@ -53,10 +61,10 @@ class APIFeatures {
   }
 
   priceRange() {
-    if (this.queryString.minPrice || this.queryString.maxPrice) {
+    if (this.originalQueryString.minPrice || this.originalQueryString.maxPrice) {
       const priceFilter = {};
-      if (this.queryString.minPrice) priceFilter.$gte = Number(this.queryString.minPrice);
-      if (this.queryString.maxPrice) priceFilter.$lte = Number(this.queryString.maxPrice);
+      if (this.originalQueryString.minPrice) priceFilter.$gte = Number(this.originalQueryString.minPrice);
+      if (this.originalQueryString.maxPrice) priceFilter.$lte = Number(this.originalQueryString.maxPrice);
       this.query = this.query.find({ price: priceFilter });
     }
     return this;

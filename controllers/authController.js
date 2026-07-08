@@ -9,6 +9,9 @@ import {
 } from "../utils/generateToken.js";
 import * as authService from "../services/authService.js";
 import * as emailService from "../services/emailService.js";
+import { OAuth2Client } from "google-auth-library";
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const setTokenCookie = (res, token) => {
   res.cookie("refreshToken", token, {
@@ -20,7 +23,7 @@ const setTokenCookie = (res, token) => {
 };
 
 export const register = asyncWrapper(async (req, res, next) => {
-  const { firstName, lastName, email, password, phone } = req.body;
+  const { firstName, lastName, email, password, phone, role } = req.body;
 
   const existingUser = await User.findOne({ email });
   if (existingUser) {
@@ -31,18 +34,35 @@ export const register = asyncWrapper(async (req, res, next) => {
 
   const emailVerificationToken = generateEmailToken();
 
+  // Only allow 'customer' or 'seller' to be self-assigned — never 'admin'
+  const assignedRole = role === 'seller' ? 'seller' : 'customer';
+
   const user = await User.create({
     firstName,
     lastName,
     email,
     password,
     phone,
+    role: assignedRole,
     emailVerificationToken: crypto
       .createHash("sha256")
       .update(emailVerificationToken)
       .digest("hex"),
-    emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000,
   });
+
+  // If registering as a seller, also create the vendor record if store info provided
+  if (assignedRole === 'seller' && req.body.storeName) {
+    const { default: Vendor } = await import('../models/Vendor.js');
+    await Vendor.create({
+      user: user._id,
+      storeName: req.body.storeName,
+      storeDescription: req.body.storeDescription,
+      businessEmail: req.body.businessEmail || email,
+      businessPhone: req.body.businessPhone || phone,
+      status: 'pending'
+    });
+  }
 
   await emailService.sendVerificationEmail(user, emailVerificationToken);
 
@@ -54,7 +74,11 @@ export const register = asyncWrapper(async (req, res, next) => {
   return created(res, {
     message:
       "Registration successful. Please check your email to verify your account.",
-    data: { user: userObject },
+    data: { 
+      user: userObject,
+      // EMERGENCY DEADLINE BYPASS: Return the URL directly so it can be clicked from the Network Tab
+      verificationUrl: `${process.env.FRONTEND_URL}/auth/verify-email?token=${emailVerificationToken}`
+    },
   });
 });
 
@@ -92,6 +116,12 @@ export const login = asyncWrapper(async (req, res, next) => {
     );
   }
 
+  if (!user.isEmailVerified) {
+    return next(
+      new AppError("Please verify your email address to continue.", 403, "EMAIL_NOT_VERIFIED"),
+    );
+  }
+
   user.failedLoginAttempts = 0;
   user.accountLockedUntil = undefined;
   user.lastLoginAt = Date.now();
@@ -107,6 +137,83 @@ export const login = asyncWrapper(async (req, res, next) => {
 
   return success(res, {
     message: "Login successful",
+    data: { user: userObject, accessToken },
+  });
+});
+
+export const googleLogin = asyncWrapper(async (req, res, next) => {
+  const { credential, role } = req.body;
+  if (!credential) {
+    return next(new AppError("Google token is required", 400));
+  }
+
+  const ticket = await googleClient.verifyIdToken({
+    idToken: credential,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) {
+    return next(new AppError("Invalid Google token", 400));
+  }
+
+  const { email, given_name, family_name, picture } = payload;
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    const assignedRole = role === 'seller' ? 'seller' : 'customer';
+    
+    // Create new user, auto-verify email
+    user = await User.create({
+      firstName: given_name || "Google",
+      lastName: family_name || "User",
+      email,
+      password: crypto.randomBytes(16).toString("hex"), // Random secure password
+      isEmailVerified: true, // Google already verified their email
+      role: assignedRole,
+      avatar: { url: picture, publicId: "" },
+    });
+
+    if (assignedRole === 'seller' && req.body.storeName) {
+      const { default: Vendor } = await import('../models/Vendor.js');
+      await Vendor.create({
+        user: user._id,
+        storeName: req.body.storeName,
+        storeDescription: req.body.storeDescription,
+        businessEmail: req.body.businessEmail || email,
+        businessPhone: req.body.businessPhone || '',
+        status: 'pending'
+      });
+    }
+  } else {
+    // If user exists but wasn't verified, verify them since Google authenticated them
+    if (!user.isEmailVerified) {
+      user.isEmailVerified = true;
+      await user.save({ validateBeforeSave: false });
+    }
+    if (!user.isActive) {
+      return next(new AppError("Account has been deactivated.", 403, "ACCOUNT_INACTIVE"));
+    }
+    if (user.accountLockedUntil && user.accountLockedUntil > Date.now()) {
+      return next(new AppError("Account is temporarily locked. Try again later.", 403, "ACCOUNT_LOCKED"));
+    }
+    
+    user.failedLoginAttempts = 0;
+    user.accountLockedUntil = undefined;
+    user.lastLoginAt = Date.now();
+    await user.save({ validateBeforeSave: false });
+  }
+
+  const accessToken = generateAccessToken({ id: user._id, role: user.role });
+  const refreshToken = await authService.generateAndSaveRefreshToken(user._id);
+
+  setTokenCookie(res, refreshToken);
+
+  const userObject = user.toObject();
+  delete userObject.password;
+
+  return success(res, {
+    message: "Google Login successful",
     data: { user: userObject, accessToken },
   });
 });
@@ -268,5 +375,36 @@ export const verifyOtp = asyncWrapper(async (req, res, next) => {
       user: result.user,
       token: result.token 
     },
+  });
+});
+export const resendVerification = asyncWrapper(async (req, res, next) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return next(new AppError("No account found with that email.", 404, "NOT_FOUND"));
+  }
+
+  if (user.isEmailVerified) {
+    return next(new AppError("Email is already verified.", 400, "ALREADY_VERIFIED"));
+  }
+
+  const emailVerificationToken = generateEmailToken();
+
+  user.emailVerificationToken = crypto
+    .createHash("sha256")
+    .update(emailVerificationToken)
+    .digest("hex");
+  user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+  
+  await user.save({ validateBeforeSave: false });
+  await emailService.sendVerificationEmail(user, emailVerificationToken);
+
+  return success(res, { 
+    message: "Verification email resent successfully.",
+    data: {
+      // EMERGENCY DEADLINE BYPASS
+      verificationUrl: `${process.env.FRONTEND_URL}/auth/verify-email?token=${emailVerificationToken}`
+    }
   });
 });

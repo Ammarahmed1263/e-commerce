@@ -15,13 +15,20 @@ export const registerValidation = [
     }
     return true;
   }),
-  body('phone').optional({ values: 'falsy' }).isMobilePhone('any').withMessage('Invalid phone number'),
+  // phone is optional — accept any non-empty string, skip format check to avoid locale issues
+  body('phone').optional({ values: 'falsy' }).isString().withMessage('Invalid phone number'),
   body('acceptTerms').custom((value) => {
     if (value !== true && value !== 'true') {
       throw new Error('You must accept the terms and conditions');
     }
     return true;
-  })
+  }),
+  // seller-specific fields — all optional at validation level, controller handles logic
+  body('role').optional().isIn(['customer', 'seller']).withMessage('Invalid role'),
+  body('storeName').optional({ values: 'falsy' }).isString().isLength({ min: 2, max: 100 }).withMessage('Store name must be between 2 and 100 characters'),
+  body('storeDescription').optional({ values: 'falsy' }).isString(),
+  body('businessEmail').optional({ values: 'falsy' }).isEmail().withMessage('Invalid business email'),
+  body('businessPhone').optional({ values: 'falsy' }).isString(),
 ];
 
 export const loginValidation = [
@@ -34,6 +41,10 @@ export const verifyEmailValidation = [
 ];
 
 export const forgotPasswordValidation = [
+  body('email').trim().notEmpty().withMessage('Email is required').isEmail().normalizeEmail()
+];
+
+export const resendVerificationValidation = [
   body('email').trim().notEmpty().withMessage('Email is required').isEmail().normalizeEmail()
 ];
 

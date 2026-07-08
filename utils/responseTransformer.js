@@ -11,6 +11,16 @@ export function transformResponse(data, seen = new WeakSet()) {
     return transformResponse(data.toObject(), seen);
   }
 
+  // Handle Date objects
+  if (data instanceof Date) {
+    return data.toISOString();
+  }
+
+  // Handle MongoDB ObjectId specifically
+  if (data._bsontype === 'ObjectID' || data._bsontype === 'ObjectId' || (data.constructor && data.constructor.name === 'ObjectId')) {
+    return data.toString();
+  }
+
   // Arrays – map each element with the same seen set
   if (Array.isArray(data)) {
     return data.map(item => transformResponse(item, seen));
@@ -23,7 +33,17 @@ export function transformResponse(data, seen = new WeakSet()) {
       result.id = String(value);
       continue;
     }
-    if (['thumbnail', 'avatar', 'image'].includes(key)) {
+    if (key === 'avatar') {
+      if (typeof value === 'string') {
+        result[key] = value;
+      } else if (value && typeof value === 'object' && value.url) {
+        result[key] = value.url;
+      } else {
+        result[key] = null;
+      }
+      continue;
+    }
+    if (['thumbnail', 'image'].includes(key)) {
       if (typeof value === 'string') {
         result[key] = { url: value };
       } else if (value && typeof value === 'object') {
